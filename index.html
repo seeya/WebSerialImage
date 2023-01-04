@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>ESPNow Camera Live Viewer</title>
+	</head>
+	<body>
+		<h1>Live View</h1>
+		<button>Connect Serial</button>
+		<br/>
+		<img id="preview" style="transform: rotate(-90deg);"/>
+	</body>
+</html>
+
+<script>
+	const button = document.querySelector("button");
+	const img = document.querySelector("#preview");
+	let port;
+	let data = "";
+	window.onload = function() {
+		button.addEventListener("click", async () => {
+			port = await navigator.serial.requestPort();
+			await port.open({ baudRate: 115200 });
+
+			let decoder = new TextDecoderStream();
+			inputDone = port.readable.pipeTo(decoder.writable);
+			inputStream = decoder.readable;
+
+			reader = inputStream.getReader();
+			readLoop();
+		});
+	}
+
+	async function readLoop() {
+		while (true) {
+			const { value, done } = await reader.read();
+		  	if (value) {
+				data += value;
+				
+				let stx_index = data.indexOf("STX");
+				let etx_index = data.indexOf("ETX");
+				if(stx_index !== -1) {
+					data = data.substring(stx_index + 3);
+				}
+
+				if(etx_index !== -1) {
+					data = data.substring(0, etx_index);
+					convertHexToImage();
+				}
+		  	}
+
+		  	if (done) {
+		    		console.log('[readLoop] DONE', done);
+		    		reader.releaseLock();
+		    		break;
+		  	}
+		}
+	}
+
+	function convertHexToImage() {
+		let input = data.replace(/[^A-Fa-f0-9]/g, "");
+		let binary = new Array();
+		for (let i = 0; i < input.length / 2; i++) {
+			let h = input.substr(i * 2, 2);
+			binary[i] = parseInt(h, 16);
+		}
+
+		let byteArray = new Uint8Array(binary);
+		img.src = window.URL.createObjectURL(new Blob([byteArray], { type: 'application/octet-stream' }));
+	}
+
+
+</script>
